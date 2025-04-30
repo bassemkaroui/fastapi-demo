@@ -1,0 +1,43 @@
+services:
+  fastapi-demo:
+    image: fastapi-demo:0.0.1
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - ENVIRONMENT=prod
+    ports:
+      - "8000:8000"
+    profiles:
+      - prod
+    restart: unless-stopped
+
+  fastapi-demo-dev:
+    image: fastapi-demo:0.0.1-devel
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+      args:
+        - ENVIRONMENT=dev
+    ports:
+      - "8001:8000"
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+    command: [ "sh" ]
+    profiles:
+      - dev
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /workspaces/fastapi-demo
+          ignore:
+            - .venv/
+            - .tox/
+
+        - action: rebuild
+          path: ./pyproject.toml
+    restart: unless-stopped

@@ -1,0 +1,130 @@
+site_name: fastapi-demo
+repo_url: https://github.com/bassemkaroui/fastapi-demo
+site_url: https://bassemkaroui.github.io/fastapi-demo
+repo_name: bassemkaroui/fastapi-demo
+site_description: A demo API using FastAPI
+site_author: Bassem Karoui
+edit_uri: edit/main/docs/
+# copyright: Maintained by <a href="https://bassemkaroui.com">bassemkaroui</a>.
+copyright: Maintained by <a href="https://github.com/bassemkaroui"></a>.
+
+nav:
+  - Home: index.md
+  - Modules: modules.md
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["src/fastapi_demo"]
+          options:
+            extensions:
+            - griffe_typingdoc
+            show_root_heading: true
+            show_if_no_docstring: true
+            # preload_modules:
+            # - httpx
+            # - starlette
+            inherited_members: true
+            members_order: source
+            separate_signature: true
+            unwrap_annotated: true
+            filters:
+            - '!^_'
+            merge_init_into_class: true
+            docstring_section_style: spacy
+            signature_crossrefs: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+  - minify:
+      minify_html: !ENV [DEPLOY, false]
+
+theme:
+  name: material
+  features:
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    # - navigation.instant.preview
+    - navigation.instant.progress
+    - navigation.path
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    # - navigation.sections
+    # - toc.integrate
+    - toc.follow
+    - search.suggest
+    - search.share
+    - search.highlight
+    - content.tabs.link
+    # - content.code.annotation
+    # - content.code.select
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - content.footnote.tooltips
+  # feature:
+  #   tabs: true
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/lightbulb-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - css/overrides.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bassemkaroui/fastapi-demo
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/fastapi-demo
+
+markdown_extensions:
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - admonition
+  - footnotes
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.mark
+  - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.blocks.tab:
+      alternate_style: true
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - callouts:
+      strip_period: no
+  - md_in_html
