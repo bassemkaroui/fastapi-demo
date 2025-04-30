@@ -54,7 +54,7 @@ Then, install the dependencies using Make:
     make setup-dev
     ```
 
-> [!info]
+> [!note]
 > Using `make` ensures that `uv` is installed automatically if it's not already present.
 
 
