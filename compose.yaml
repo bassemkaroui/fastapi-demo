@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   fastapi-demo:
-    image: fastapi-demo:0.0.1
+    image: fastapi-demo:0.1.0
     build:
       context: .
       dockerfile: Dockerfile
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
 
   fastapi-demo-dev:
-    image: fastapi-demo:0.0.1-devel
+    image: fastapi-demo:0.1.0-devel
     build:
       context: .
       dockerfile: Dockerfile
