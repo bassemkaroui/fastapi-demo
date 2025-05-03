@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -93,22 +94,6 @@ def _is_interactive() -> bool:
     return sys.stdin.isatty() and os.environ.get("CI", "").lower() != "true"
 
 
-def _wait_for_dev_containers_start(ctx: Context) -> None:
-    """Start the dev containers and wait until they are fully up.
-
-    This function triggers the `docker_start` duty with the `dev` profile,
-    then continuously checks the containers status until `fastapi-demo-dev`
-    is running.
-    """
-    docker_start.run(env="dev")
-    while True:
-        output = ctx.run(
-            ["docker", "compose", "top"], silent=True, allow_overrides=False, capture=True
-        )
-        if "fastapi-demo-dev" in output:
-            break
-
-
 @contextmanager
 def _setup_container(ctx: Context) -> Iterator[None]:
     """Ensure the dev Docker container is running for the duration of a context block.
@@ -124,13 +109,13 @@ def _setup_container(ctx: Context) -> Iterator[None]:
     )
     if build_docker_images:
         docker_build.run(env="dev")
-        _wait_for_dev_containers_start(ctx)
+        docker_start.run(env="dev")
     else:
         output = ctx.run(
             ["docker", "compose", "top"], silent=True, allow_overrides=False, capture=True
         )
         if "fastapi-demo-dev" not in output:
-            _wait_for_dev_containers_start(ctx)
+            docker_start.run(env="dev")
     try:
         yield
     finally:
@@ -274,13 +259,21 @@ def docker_start(ctx: Context, env: str | None = None) -> None:
     env = env or _pick_env(ctx)
     if env == "dev":
         ctx.run(
-            "docker compose --profile dev up --watch fastapi-demo-dev > /dev/null 2>&1 &",
+            "docker compose --profile dev up --watch > /dev/null 2>&1 &",
             title="Starting dev containers",
         )
     elif env == "prod":
         ctx.run(
             ["docker", "compose", "--profile", "prod", "up", "-d"], title="Starting prod containers"
         )
+    while True:
+        output = ctx.run(
+            ["docker", "compose", "top"], silent=True, allow_overrides=False, capture=True
+        )
+        service = "fastapi-demo" if env == "prod" else "fastapi-demo-dev"
+        if service in output:
+            break
+        time.sleep(0.5)
 
 
 @duty(

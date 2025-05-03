@@ -50,8 +50,7 @@ ENV PATH="/workspaces/fastapi-demo/.venv/bin:$PATH"
 
 USER fastapi-demo
 
-# CMD ["uvicorn", "fastapi-demo:app", "--host", "0.0.0.0", "--port", "8000"]
-# CMD ["sleep", "1000"]
+CMD ["uvicorn", "fastapi_demo.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # ---------- development image ----------
 FROM python:3.12-slim-bookworm AS dev
@@ -71,4 +70,4 @@ ENV PATH="/workspaces/fastapi-demo/.venv/bin:$PATH"
 
 USER fastapi-demo
 
-# CMD ["uvicorn", "fastapi-demo:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "fastapi_demo.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
