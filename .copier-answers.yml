@@ -1,0 +1,45 @@
+_commit: 0.2.0-22-g823aa11
+_src_path: https://github.com/bassemkaroui/python-template-uv.git
+author_email: bassem.karoui1@gmail.com
+author_fullname: Bassem Karoui
+author_github_handle: bassemkaroui
+backend_deps:
+- fastapi[standard]
+- slowapi
+- pyjwt[crypto]
+- passlib[bcrypt]
+- pydantic
+- pydantic-settings
+- sqlmodel
+- psycopg2-binary
+- alembic
+copyright_holder: Bassem Karoui
+copyright_license: MIT License
+core_data_deps: []
+coverage_threshold: 100
+cz_gitmoji: true
+dependencies_categories:
+- core_data
+- backend
+- dev
+dev_deps:
+- pytest-asyncio
+dockerfile: true
+documentation: https://bassemkaroui.github.io/fastapi-demo
+gpus: false
+homepage: https://bassemkaroui.github.io/fastapi-demo
+min_python_version: '3.10'
+preconfig_dependencies: true
+privileged_container: false
+project_description: A demo API using FastAPI
+project_keywords: python,fastapi-demo
+project_name: fastapi-demo
+publish_to_pypi: false
+pytest_xdist: false
+python_version: '3.12'
+repository: https://github.com/bassemkaroui/fastapi-demo
+repository_provider: github
+tox: true
+with_conventional_commits: true
+with_strict_typing: false
+with_typer_cli: false

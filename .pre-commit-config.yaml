@@ -1,0 +1,68 @@
+default_install_hook_types:
+  - pre-commit
+  - post-checkout
+  - post-merge
+  - post-rewrite
+  - pre-push
+  - commit-msg
+
+default_stages:
+  - pre-commit
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: "v5.0.0"
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+        exclude: ^mkdocs\.yml$
+      - id: check-json
+      - id: check-added-large-files
+        stages: [pre-commit]
+      - id: detect-private-key
+      - id: pretty-format-json
+        args: [--autofix, --no-sort-keys]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: trailing-whitespace
+        stages: [pre-commit]
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.5.1
+    hooks:
+      - id: commitizen
+        # needed by Renovate to support additional dependencies
+        # see https://docs.renovatebot.com/modules/manager/pre-commit/
+        language: python
+        additional_dependencies:
+          - cz-conventional-gitmoji
+        stages:
+          - commit-msg
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.11.5"
+    hooks:
+      - id: ruff
+        args: [--exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.6.14
+    hooks:
+      - id: uv-sync
+        args: ["--locked"]
+        stages:
+          - post-checkout
+          - post-merge
+          - post-rewrite
+          - pre-push
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        pass_filenames: false
