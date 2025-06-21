@@ -25,26 +25,31 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-
     "fastapi[standard]>=0.115.12",
     "slowapi>=0.1.9",
-    "pyjwt[crypto]>=2.10.1",
-    "passlib[bcrypt]>=1.7.4",
     "pydantic>=2.10.6",
     "pydantic-settings>=2.8.1",
     "sqlmodel>=0.0.24",
-    "psycopg2-binary>=2.9.10",
-    "alembic>=1.15.2",
+    "tenacity>=9.1.2",
+    "orjson>=3.10.18",
+    "fastapi-users[oauth,redis]>=14.0.1",
+    "fastapi-users-db-sqlmodel>=0.3.0",
+    "asyncpg>=0.30.0",
+    "aiosqlite>=0.21.0",
+    "fastapi-mail>=1.5.0",
+    "alembic>=1.16.1",
+    "limits>=5.2.0",
+    "aiocache>=0.12.3",
+    "asgiref>=3.8.1",
 ]
-
-
 
 [project.urls]
 Homepage = "https://bassemkaroui.github.io/fastapi-demo"
 Repository = "https://github.com/bassemkaroui/fastapi-demo"
 Documentation = "https://bassemkaroui.github.io/fastapi-demo"
 
-
+# [project.scripts]
+# fastapi-demo-prestart = "fastapi_demo.cli.prestart:main"
 
 [dependency-groups]
 dev = [
@@ -65,7 +70,6 @@ dev = [
     "griffe>=1.7.2",
     "ipython>=8.35.0",
     "duty>=1.6.0",
-
     "pytest-asyncio>=0.26.0",
 ]
 
@@ -81,6 +85,7 @@ gpg_sign = true
 
 [tool.mypy]
 files = ["src"]
+exclude = ["alembic"]
 check_untyped_defs = true
 disallow_untyped_defs = true
 # disallow_any_unimported = true
@@ -91,6 +96,10 @@ show_column_numbers = true
 show_error_codes = true
 show_error_context = true
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["fastapi_demo.api.routes.*", "fastapi_demo.api.main"]
+disallow_untyped_defs = false
 
 [tool.pyright]
 include = ["src"]
@@ -103,6 +112,7 @@ reportUndefinedVariable = "none"
 target-version = "py310"
 line-length = 100
 fix = true
+exclude = ["alembic"]
 
 [tool.ruff.lint]
 preview = true

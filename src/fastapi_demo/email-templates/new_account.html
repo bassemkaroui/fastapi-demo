@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>Welcome to {{ project_name }}!</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <style>
+            /* Reset & base styles */
+            body,
+            p,
+            h1,
+            h2,
+            a {
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: "Helvetica Neue", Arial, sans-serif;
+                background-color: #f4f7fa;
+                color: #333;
+                line-height: 1.6;
+            }
+            a {
+                color: #1e88e5;
+                text-decoration: none;
+            }
+            img {
+                display: block;
+                max-width: 100%;
+            }
+            *,
+            *:before,
+            *:after {
+                box-sizing: border-box;
+            }
+            /* Wrapper & content */
+            .email-wrapper {
+                width: 100%;
+                padding: 10px 0px;
+                background-color: #f4f7fa;
+                box-sizing: border-box;
+            }
+            .email-content {
+                width: 100%; /* new */
+                max-width: 600px;
+                margin: 0 auto;
+                background: #ffffff;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+            }
+
+            /* Header */
+            .email-header {
+                background: linear-gradient(135deg, #1e88e5 0%, #42a5f5 100%);
+                padding: 40px 20px;
+                text-align: center;
+                color: #fff;
+            }
+            .email-header img {
+                max-width: 120px;
+                margin-bottom: 16px;
+            }
+            .email-header h1 {
+                font-size: 28px;
+                font-weight: 400;
+            }
+
+            /* Body */
+            .email-body {
+                padding: 30px 20px;
+            }
+            .email-body h2 {
+                font-size: 22px;
+                margin-bottom: 16px;
+                color: #1e88e5;
+            }
+            .email-body p {
+                margin-bottom: 16px;
+                font-size: 16px;
+            }
+            .btn-primary {
+                display: inline-block;
+                background-color: #1e88e5;
+                color: #fff;
+                padding: 14px 24px;
+                border-radius: 6px;
+                font-weight: bold;
+                text-decoration: none;
+            }
+
+            /* Footer */
+            .email-footer {
+                background: #f0f4f8;
+                padding: 20px;
+                text-align: center;
+                font-size: 14px;
+                color: #777;
+            }
+            .email-footer a {
+                margin: 0 8px;
+                color: #1e88e5;
+            }
+
+            /* Responsive */
+            @media only screen and (max-width: 480px) {
+                .email-header h1 {
+                    font-size: 22px;
+                }
+                .email-body h2 {
+                    font-size: 18px;
+                }
+                .email-body p {
+                    font-size: 12px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-wrapper">
+            <div class="email-content">
+                <!-- Header -->
+                <div class="email-header">
+                    <!-- <img -->
+                    <!--     src="https://via.placeholder.com/120x120.png?text=Logo" -->
+                    <!--     alt="{{ project_name }} logo" -->
+                    <!-- /> -->
+                    <h1>Welcome to {{ project_name }}!</h1>
+                </div>
+
+                <!-- Body -->
+                <div class="email-body">
+                    <h2>Hi {{ user.first_name or user.email}},</h2>
+                    <p>
+                        Thank you for joining
+                        <strong>{{ project_name }}</strong>. We’re thrilled to
+                        have you on board.
+                    </p>
+                    <!-- <p>Here’s a quick start guide to get you up and running:</p> -->
+                    <!-- <ul> -->
+                    <!--     <li> -->
+                    <!--         <a href="{{ docs_url }}">Read the Documentation</a> -->
+                    <!--     </li> -->
+                    <!--     <li> -->
+                    <!--         <a href="{{ dashboard_url }}" -->
+                    <!--             >Visit Your Dashboard</a -->
+                    <!--         > -->
+                    <!--     </li> -->
+                    <!--     <li><a href="{{ support_url }}">Contact Support</a></li> -->
+                    <!-- </ul> -->
+                    <!-- <p style="text-align: center; margin: 30px 0"> -->
+                    <!--     <a href="{{ login_url }}" class="btn-primary" -->
+                    <!--         >Go to My {{ project_name }}</a -->
+                    <!--     > -->
+                    <!-- </p> -->
+                    <!-- <p> -->
+                    <!--     Feel free to explore and let us know if you have any questions. -->
+                    <!-- </p> -->
+                    <p>Cheers,<br />The {{ project_name }} Team</p>
+                </div>
+
+                <!-- Footer -->
+
+                <!-- <div class="email-footer"> -->
+                <!--     &copy; {{ current_year }} {{ project_name }}. All rights -->
+                <!--     reserved.<br /> -->
+                <!--     <a href="{{ terms_url }}">Terms of Service</a> • -->
+                <!--     <a href="{{ privacy_url }}">Privacy Policy</a><br /> -->
+                <!--     <a href="{{ unsubscribe_url }}">Unsubscribe</a> -->
+                <!-- </div> -->
+            </div>
+        </div>
+    </body>
+</html>

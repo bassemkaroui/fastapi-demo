@@ -1,5 +1,96 @@
 services:
-  fastapi-demo:
+  db:
+    image: postgres:17.5-bookworm
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - fastapi-demo-db-data:/var/lib/postgresql/data/pgdata
+    env_file:
+      - .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+      - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+      - POSTGRES_DB=${POSTGRES_DB?Variable not set}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    profiles:
+      - db
+      - dev
+      - prod
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    # networks:
+    #   - traefik-public
+    #   - default
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
+    ports:
+      - "8088:8080"
+    profiles:
+      - db
+      - dev
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.docker.network=traefik-public
+    #   - traefik.constraint-label=traefik-public
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.rule=Host(`adminer.${DOMAIN?Variable not set}`)
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.entrypoints=http
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.middlewares=https-redirect
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.rule=Host(`adminer.${DOMAIN?Variable not set}`)
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.entrypoints=https
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls=true
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls.certresolver=le
+    #   - traefik.http.services.${PROJECT_NAME?Variable not set}-adminer.loadbalancer.server.port=8080
+
+  redis:
+    image: redis/redis-stack-server:7.2.0-v17
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - fastapi-demo-redis-data:/data
+    ports:
+      - "6379:6379"
+    profiles:
+      - redis
+      - dev
+      - prod
+
+  redis-insight:
+    image: redis/redisinsight:2.70.0
+    restart: unless-stopped
+    # networks:
+    #   - traefik-public
+    #   - default
+    volumes:
+      - fastapi-demo-redisinsight-data:/data
+    ports:
+      - "5540:5540"
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - RI_REDIS_HOST=redis
+      - RI_REDIS_PORT=6379
+    profiles:
+      - redis
+      - dev
+
+  prestart:
     image: fastapi-demo:0.0.1
     build:
       context: .
@@ -7,26 +98,101 @@ services:
       target: prod
       args:
         - ENVIRONMENT=prod
-    ports:
-      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+    command: bash scripts/prestart.sh
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_SERVER=redis
     profiles:
       - prod
+      - dev
+
+  fastapi-demo:
+    image: fastapi-demo:0.0.1
     restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - ENVIRONMENT=prod
+    # networks:
+    #   - traefik-public
+    #   - default
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+      prestart:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_SERVER=redis
+    ports:
+      - "8080:8080"
+    profiles:
+      - prod
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # labels:
+    #   - traefik.enable=true
+    #   - traefik.docker.network=traefik-public
+    #   - traefik.constraint-label=traefik-public
+    #
+    #   - traefik.http.services.${PROJECT_NAME?Variable not set}-backend.loadbalancer.server.port=8080
+    #
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.rule=Host(`api.${DOMAIN?Variable not set}`)
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.entrypoints=http
+    #
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.rule=Host(`api.${DOMAIN?Variable not set}`)
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.entrypoints=https
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.tls=true
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.tls.certresolver=le
+    #
+    #   # Enable redirection for HTTP and HTTPS
+    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.middlewares=https-redirect
 
   fastapi-demo-dev:
     image: fastapi-demo:0.0.1-devel
+    restart: unless-stopped
     build:
       context: .
       dockerfile: Dockerfile
       target: dev
       args:
         - ENVIRONMENT=dev
+    depends_on:
+      db:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+      prestart:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=db
+      - REDIS_SERVER=redis
     ports:
       - "8001:8000"
       - "8080:8080"
     stdin_open: true
     tty: true
-    command: ["sh"]
+    # command: ["sh"]
     profiles:
       - dev
     develop:
@@ -40,4 +206,86 @@ services:
 
         - action: rebuild
           path: ./pyproject.toml
-    restart: unless-stopped
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  #
+  # traefik:
+  #   image: traefik:3.0
+  #   ports:
+  #     # Listen on port 80, default for HTTP, necessary to redirect to HTTPS
+  #     - 80:80
+  #     # Listen on port 443, default for HTTPS
+  #     - 443:443
+  #   restart: always
+  #   labels:
+  #     # Enable Traefik for this service, to make it available in the public network
+  #     - traefik.enable=true
+  #     # Use the traefik-public network (declared below)
+  #     - traefik.docker.network=traefik-public
+  #     # Define the port inside of the Docker service to use
+  #     - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
+  #     # Make Traefik use this domain (from an environment variable) in HTTP
+  #     - traefik.http.routers.traefik-dashboard-http.entrypoints=http
+  #     - traefik.http.routers.traefik-dashboard-http.rule=Host(`traefik.${DOMAIN?Variable not set}`)
+  #     # traefik-https the actual router using HTTPS
+  #     - traefik.http.routers.traefik-dashboard-https.entrypoints=https
+  #     - traefik.http.routers.traefik-dashboard-https.rule=Host(`traefik.${DOMAIN?Variable not set}`)
+  #     - traefik.http.routers.traefik-dashboard-https.tls=true
+  #     # Use the "le" (Let's Encrypt) resolver created below
+  #     - traefik.http.routers.traefik-dashboard-https.tls.certresolver=le
+  #     # Use the special Traefik service api@internal with the web UI/Dashboard
+  #     - traefik.http.routers.traefik-dashboard-https.service=api@internal
+  #     # https-redirect middleware to redirect HTTP to HTTPS
+  #     - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+  #     - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
+  #     # traefik-http set up only to use the middleware to redirect to https
+  #     - traefik.http.routers.traefik-dashboard-http.middlewares=https-redirect
+  #     # admin-auth middleware with HTTP Basic auth
+  #     # Using the environment variables USERNAME and HASHED_PASSWORD
+  #     - traefik.http.middlewares.admin-auth.basicauth.users=${USERNAME?Variable not set}:${HASHED_PASSWORD?Variable not set}
+  #     # Enable HTTP Basic auth, using the middleware created above
+  #     - traefik.http.routers.traefik-dashboard-https.middlewares=admin-auth
+  #   volumes:
+  #     # Add Docker as a mounted volume, so that Traefik can read the labels of other services
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #     # Mount the volume to store the certificates
+  #     - traefik-public-certificates:/certificates
+  #   command:
+  #     # Enable Docker in Traefik, so that it reads labels from Docker services
+  #     - --providers.docker
+  #     # Do not expose all Docker services, only the ones explicitly exposed
+  #     - --providers.docker.exposedbydefault=false
+  #     # Create an entrypoint "http" listening on port 80
+  #     - --entrypoints.http.address=:80
+  #     # Create an entrypoint "https" listening on port 443
+  #     - --entrypoints.https.address=:443
+  #     # Create the certificate resolver "le" for Let's Encrypt, uses the environment variable EMAIL
+  #     - --certificatesresolvers.le.acme.email=${EMAIL?Variable not set}
+  #     # Store the Let's Encrypt certificates in the mounted volume
+  #     - --certificatesresolvers.le.acme.storage=/certificates/acme.json
+  #     # Use the TLS Challenge for Let's Encrypt
+  #     - --certificatesresolvers.le.acme.tlschallenge=true
+  #     # Enable the access log, with HTTP requests
+  #     - --accesslog
+  #     # Enable the Traefik log, for configurations and errors
+  #     - --log
+  #     # Enable the Dashboard and API
+  #     - --api
+  #   networks:
+  #     # Use the public network created to be shared between Traefik and
+  #     # any other service that needs to be publicly available with HTTPS
+  #     - traefik-public
+
+volumes:
+  fastapi-demo-db-data: {}
+  fastapi-demo-redis-data: {}
+  fastapi-demo-redisinsight-data: {}
+  # traefik-public-certificates: {}
+# networks:
+#   traefik-public:
+#     # Allow setting it to false for testing
+#     external: true
