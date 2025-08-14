@@ -1,13 +1,14 @@
 import asyncio
 from logging.config import fileConfig
 
+import alembic_postgresql_enum  # noqa: F401
 from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from fastapi_demo.core.config import settings
-from fastapi_demo.core.db import metadata
+from fastapi_demo.core.db.engine import metadata
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

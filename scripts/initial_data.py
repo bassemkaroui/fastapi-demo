@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from fastapi_demo.core.utils import init_db
+from fastapi_demo.core.utils.database import init_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

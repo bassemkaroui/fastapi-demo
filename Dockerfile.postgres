@@ -1,0 +1,49 @@
+# -------------------------
+# Stage 1: builder (compile/install pgx_ulid)
+# -------------------------
+ARG PG_MAJOR=17
+FROM postgres:${PG_MAJOR}.5-bookworm AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV HOME=/root
+ENV PATH=/root/.cargo/bin:$PATH
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    git \
+    build-essential \
+    libpq-dev \
+    postgresql-server-dev-${PG_MAJOR} \
+    curl \
+    libreadline6-dev \
+    zlib1g-dev \
+    pkg-config \
+    cmake \
+    debhelper \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /home/build
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal --default-toolchain 1.85.0 && \
+    rustup --version && rustc --version && cargo --version
+
+RUN cargo install cargo-pgrx --version 0.16.0 --locked
+
+RUN cargo pgrx init --pg${PG_MAJOR} $(which pg_config)
+
+RUN git clone https://github.com/pksunkara/pgx_ulid.git
+
+WORKDIR /home/build/pgx_ulid
+
+RUN cargo pgrx install
+
+# -------------------------
+# Stage 2: runtime
+# -------------------------
+FROM postgres:${PG_MAJOR}.5-bookworm AS runtime
+
+ARG PG_MAJOR
+
+COPY --from=builder /usr/share/postgresql/${PG_MAJOR}/extension /usr/share/postgresql/${PG_MAJOR}/extension
+COPY --from=builder /usr/lib/postgresql/${PG_MAJOR}/lib /usr/lib/postgresql/${PG_MAJOR}/lib

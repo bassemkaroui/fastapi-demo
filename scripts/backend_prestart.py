@@ -1,14 +1,10 @@
 import asyncio
 import logging
 
-from sqlalchemy import select
-
-# from sqlmodel import select
+from sqlmodel import select
 from tenacity import after_log, before_log, retry, stop_after_attempt, wait_fixed
 
-from fastapi_demo.core.db import async_session_maker
-
-# from fastapi_demo.core.db import async_sqlmodel_session_maker
+from fastapi_demo.core.db.engine import AsyncSessionMaker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -26,10 +22,8 @@ MAX_TRIES = 60 * 5  # 5 minutes
 )
 async def init() -> None:
     try:
-        async with async_session_maker() as session:
-            await session.execute(select(1))
-        # async with async_sqlmodel_session_maker() as session:
-        #     await session.exec(select(1))
+        async with AsyncSessionMaker() as session:
+            await session.exec(select(1))
     except Exception:
         logger.exception("The Database is not ready yet")
         raise

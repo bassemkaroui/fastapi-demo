@@ -1,94 +1,204 @@
 services:
+  # db:
+  #   image: postgres:17.5-bookworm
+  #   container_name: fastapi-demo-postgres
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+  #     interval: 10s
+  #     retries: 5
+  #     start_period: 10s
+  #     timeout: 10s
+  #   volumes:
+  #     - fastapi-demo-db-data:/var/lib/postgresql/data/pgdata
+  #   # env_file:
+  #   #   - .env
+  #   environment:
+  #     - PGDATA=/var/lib/postgresql/data/pgdata
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
+  #     - POSTGRES_USER=${POSTGRES_USER?Variable not set}
+  #     - POSTGRES_DB=${POSTGRES_DB?Variable not set}
+
   db:
-    image: postgres:17.5-bookworm
+    image: pgx-ulid-postgres:17.5-bookworm
+    container_name: fastapi-demo-postgres
     restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       retries: 5
-      start_period: 30s
+      start_period: 10s
       timeout: 10s
     volumes:
       - fastapi-demo-db-data:/var/lib/postgresql/data/pgdata
-    env_file:
-      - .env
+    # env_file:
+    #   - .env
     environment:
       - PGDATA=/var/lib/postgresql/data/pgdata
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?Variable not set}
       - POSTGRES_USER=${POSTGRES_USER?Variable not set}
       - POSTGRES_DB=${POSTGRES_DB?Variable not set}
-    ports:
-      - "${POSTGRES_PORT}:5432"
-    profiles:
-      - db
-      - dev
-      - prod
-
-  adminer:
-    image: adminer
-    restart: unless-stopped
-    # networks:
-    #   - traefik-public
-    #   - default
-    depends_on:
-      - db
-    environment:
-      - ADMINER_DESIGN=pepa-linha-dark
-    ports:
-      - "8088:8080"
-    profiles:
-      - db
-      - dev
-    # labels:
-    #   - traefik.enable=true
-    #   - traefik.docker.network=traefik-public
-    #   - traefik.constraint-label=traefik-public
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.rule=Host(`adminer.${DOMAIN?Variable not set}`)
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.entrypoints=http
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-http.middlewares=https-redirect
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.rule=Host(`adminer.${DOMAIN?Variable not set}`)
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.entrypoints=https
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls=true
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-adminer-https.tls.certresolver=le
-    #   - traefik.http.services.${PROJECT_NAME?Variable not set}-adminer.loadbalancer.server.port=8080
+    command: ["postgres", "-c", "shared_preload_libraries=pgx_ulid"]
 
   redis:
     image: redis/redis-stack-server:7.2.0-v17
+    container_name: fastapi-demo-redis
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 5s
-      retries: 3
+      retries: 5
       start_period: 10s
     volumes:
       - fastapi-demo-redis-data:/data
-    ports:
-      - "6379:6379"
-    profiles:
-      - redis
-      - dev
-      - prod
 
-  redis-insight:
-    image: redis/redisinsight:2.70.0
+  rabbitmq:
+    image: rabbitmq:4.1.3-management
+    container_name: fastapi-demo-rabbitmq
     restart: unless-stopped
-    # networks:
-    #   - traefik-public
-    #   - default
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_DEFAULT_VHOST=${RABBITMQ_DEFAULT_VHOST}
+      # Optional tuning:
+      - RABBITMQ_NET_TICKTIME=60
     volumes:
-      - fastapi-demo-redisinsight-data:/data
-    ports:
-      - "5540:5540"
+      - fastapi-demo-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      # test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      test:
+        [
+          "CMD-SHELL",
+          "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_local_alarms",
+        ]
+      start_period: 5s
+      interval: 60s
+      timeout: 30s
+      retries: 6
+
+  celery_worker:
+    image: fastapi-demo:0.0.1
+    container_name: fastapi-demo-celery-worker
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - ENVIRONMENT=prod
     depends_on:
+      rabbitmq:
+        condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
-      - RI_REDIS_HOST=redis
-      - RI_REDIS_PORT=6379
-    profiles:
-      - redis
-      - dev
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - REDIS_SERVER=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_SERVER=rabbitmq
+      - RABBITMQ_AMQP_PORT=5672
+      - FGA_API_URL=http://openfga:8080
+      - FGA_STORE_NAME=fastapi-demo
+    command: celery -A fastapi_demo.core.celery:${CELERY_APP_NAME} worker --loglevel=info
+    healthcheck:
+      disable: true
+
+  # --- OpenFGA ---
+
+  primary_postgres:
+    image: postgres:17.5-bookworm
+    container_name: fastapi-demo-openfga-primary-postgres
+    restart: unless-stopped
+    command: postgres -c 'max_connections=100'
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${OPENFGA_POSTGRES_PRIMARY_USER} -d ${OPENFGA_POSTGRES_PRIMARY_DB}",
+        ]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+    volumes:
+      - fastapi-demo-openfga-primary-db-data:/var/lib/postgresql/data/pgdata
+    # env_file:
+    #   - .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=${OPENFGA_POSTGRES_PRIMARY_PASSWORD?Variable not set}
+      - POSTGRES_USER=${OPENFGA_POSTGRES_PRIMARY_USER?Variable not set}
+      - POSTGRES_DB=${OPENFGA_POSTGRES_PRIMARY_DB?Variable not set}
+
+  migrate:
+    depends_on:
+      primary_postgres:
+        condition: service_healthy
+    image: openfga/openfga:v1.9.2
+    container_name: fastapi-demo-openfga-migrate
+    command: migrate
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://${OPENFGA_POSTGRES_PRIMARY_USER}:${OPENFGA_POSTGRES_PRIMARY_PASSWORD}@primary_postgres:5432/${OPENFGA_POSTGRES_PRIMARY_DB}?sslmode=disable
+    # networks:
+    #   - openfga
+
+  openfga:
+    depends_on:
+      primary_postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    image: openfga/openfga:v1.9.2
+    container_name: fastapi-demo-openfga
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
+      interval: 5s
+      timeout: 30s
+      retries: 3
+    environment:
+      - OPENFGA_DATASTORE_ENGINE=postgres
+      - OPENFGA_DATASTORE_URI=postgres://${OPENFGA_POSTGRES_PRIMARY_USER}:${OPENFGA_POSTGRES_PRIMARY_PASSWORD}@primary_postgres:5432/${OPENFGA_POSTGRES_PRIMARY_DB}?sslmode=disable
+      # - OPENFGA_DATASTORE_SECONDARY_URI=postgres://${OPENFGA_POSTGRES_SECONDARY_USER}:${OPENFGA_POSTGRES_SECONDARY_PASSWORD}@replica_postgres:5432/${OPENFGA_POSTGRES_SECONDARY_DB}?sslmode=disable
+
+      - OPENFGA_DATASTORE_MAX_OPEN_CONNS=${OPENFGA_DATASTORE_MAX_OPEN_CONNS}
+      # max is OPENFGA_DATASTORE_MAX_OPEN_CONNS
+      - OPENFGA_DATASTORE_MAX_IDLE_CONNS=${OPENFGA_DATASTORE_MAX_IDLE_CONNS}
+      # max is min(idle_in_transaction_session_timeout(if != 0), (tcp_keepalives_idle + tcp_keepalives_interval*tcp_keepalives_count))
+      - OPENFGA_DATASTORE_CONN_MAX_IDLE_TIME=${OPENFGA_DATASTORE_CONN_MAX_IDLE_TIME}
+
+      - OPENFGA_AUTHN_METHOD=${OPENFGA_AUTHN_METHOD}
+      - OPENFGA_AUTHN_PRESHARED_KEYS=${OPENFGA_AUTHN_PRESHARED_KEYS}
+      - OPENFGA_LOG_FORMAT=${OPENFGA_LOG_FORMAT}
+      - OPENFGA_LOG_LEVEL=${OPENFGA_LOG_LEVEL}
+      - OPENFGA_METRICS_ENABLED=${OPENFGA_METRICS_ENABLED}
+      - OPENFGA_DATASTORE_METRICS_ENABLED=${OPENFGA_DATASTORE_METRICS_ENABLED}
+      # - OPENFGA_TRACE_ENABLED=${OPENFGA_TRACE_ENABLED}
+      # - OPENFGA_TRACE_SAMPLE_RATIO=${OPENFGA_TRACE_SAMPLE_RATIO}
+
+      # # Maximum resolution depth to attempt before throwing an error (defines how deeply nested an authorization model can be)
+      # - OPENFGA_RESOLVE_NODE_LIMIT=${OPENFGA_RESOLVE_NODE_LIMIT}
+      # # Defines how many nodes on a given level can be evaluated concurrently in a Check resolution tree
+      # - OPENFGA_RESOLVE_NODE_BREADTH_LIMIT=${OPENFGA_RESOLVE_NODE_BREADTH_LIMIT}
+      # # The maximum number of checks that can be processed concurrently in a batch check request
+      # - OPENFGA_MAX_CONCURRENT_CHECKS_PER_BATCH_CHECK=${OPENFGA_MAX_CONCURRENT_CHECKS_PER_BATCH_CHECK}
+
+      - OPENFGA_CHECK_QUERY_CACHE_ENABLED=${OPENFGA_CHECK_QUERY_CACHE_ENABLED}
+      # - OPENFGA_CHECK_QUERY_CACHE_TTL=${OPENFGA_CHECK_QUERY_CACHE_TTL}
+      - OPENFGA_CHECK_ITERATOR_CACHE_ENABLED=${OPENFGA_CHECK_ITERATOR_CACHE_ENABLED}
+      # - OPENFGA_CHECK_ITERATOR_CACHE_TTL=${OPENFGA_CHECK_ITERATOR_CACHE_TTL}
+      - OPENFGA_CACHE_CONTROLLER_ENABLED=${OPENFGA_CACHE_CONTROLLER_ENABLED}
+      # - OPENFGA_CACHE_CONTROLLER_TTL=${OPENFGA_CACHE_CONTROLLER_TTL}
+    command: run
+    # networks:
+    #   - openfga
 
   prestart:
     image: fastapi-demo:0.0.1
@@ -102,18 +212,30 @@ services:
       db:
         condition: service_healthy
         restart: true
+      celery_worker:
+        condition: service_started
+      openfga:
+        condition: service_healthy
     command: bash scripts/prestart.sh
     env_file:
       - .env
     environment:
       - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
       - REDIS_SERVER=redis
-    profiles:
-      - prod
-      - dev
+      - REDIS_PORT=6379
+      - RABBITMQ_SERVER=rabbitmq
+      - RABBITMQ_AMQP_PORT=5672
+      - FGA_API_URL=http://openfga:8080
+      - FGA_STORE_NAME=fastapi-demo
+      - FGA_TESTS_STORE_NAME=fastapi-demo-tests
+      - OPENFGA_STORE_FILE=openfga/stores/prod-store.fga.yaml
+      - OPENFGA_TESTS_STORE_FILE=openfga/stores/tests-prod-store.fga.yaml
+      - OPENFGA_MODEL_FILE=openfga/models/authorization-model.fga
 
   fastapi-demo:
     image: fastapi-demo:0.0.1
+    container_name: fastapi-demo-api
     restart: unless-stopped
     build:
       context: .
@@ -121,14 +243,13 @@ services:
       target: prod
       args:
         - ENVIRONMENT=prod
-    # networks:
-    #   - traefik-public
-    #   - default
     depends_on:
       db:
         condition: service_healthy
         restart: true
       redis:
+        condition: service_healthy
+      openfga:
         condition: service_healthy
       prestart:
         condition: service_completed_successfully
@@ -136,156 +257,22 @@ services:
       - .env
     environment:
       - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
       - REDIS_SERVER=redis
-    ports:
-      - "8080:8080"
-    profiles:
-      - prod
-    healthcheck:
-      test:
-        ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    # labels:
-    #   - traefik.enable=true
-    #   - traefik.docker.network=traefik-public
-    #   - traefik.constraint-label=traefik-public
-    #
-    #   - traefik.http.services.${PROJECT_NAME?Variable not set}-backend.loadbalancer.server.port=8080
-    #
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.rule=Host(`api.${DOMAIN?Variable not set}`)
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.entrypoints=http
-    #
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.rule=Host(`api.${DOMAIN?Variable not set}`)
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.entrypoints=https
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.tls=true
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-https.tls.certresolver=le
-    #
-    #   # Enable redirection for HTTP and HTTPS
-    #   - traefik.http.routers.${PROJECT_NAME?Variable not set}-backend-http.middlewares=https-redirect
-
-  fastapi-demo-dev:
-    image: fastapi-demo:0.0.1-devel
-    restart: unless-stopped
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: dev
-      args:
-        - ENVIRONMENT=dev
-    depends_on:
-      db:
-        condition: service_healthy
-        restart: true
-      redis:
-        condition: service_healthy
-      prestart:
-        condition: service_completed_successfully
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_SERVER=db
-      - REDIS_SERVER=redis
-    ports:
-      - "8001:8000"
-      - "8080:8080"
-    stdin_open: true
-    tty: true
-    # command: ["sh"]
-    profiles:
-      - dev
-    develop:
-      watch:
-        - action: sync
-          path: .
-          target: /workspaces/fastapi-demo
-          ignore:
-            - .venv/
-            - .tox/
-
-        - action: rebuild
-          path: ./pyproject.toml
-    healthcheck:
-      test:
-        ["CMD", "curl", "-f", "http://localhost:8000/api/utils/health-check/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-  #
-  # traefik:
-  #   image: traefik:3.0
-  #   ports:
-  #     # Listen on port 80, default for HTTP, necessary to redirect to HTTPS
-  #     - 80:80
-  #     # Listen on port 443, default for HTTPS
-  #     - 443:443
-  #   restart: always
-  #   labels:
-  #     # Enable Traefik for this service, to make it available in the public network
-  #     - traefik.enable=true
-  #     # Use the traefik-public network (declared below)
-  #     - traefik.docker.network=traefik-public
-  #     # Define the port inside of the Docker service to use
-  #     - traefik.http.services.traefik-dashboard.loadbalancer.server.port=8080
-  #     # Make Traefik use this domain (from an environment variable) in HTTP
-  #     - traefik.http.routers.traefik-dashboard-http.entrypoints=http
-  #     - traefik.http.routers.traefik-dashboard-http.rule=Host(`traefik.${DOMAIN?Variable not set}`)
-  #     # traefik-https the actual router using HTTPS
-  #     - traefik.http.routers.traefik-dashboard-https.entrypoints=https
-  #     - traefik.http.routers.traefik-dashboard-https.rule=Host(`traefik.${DOMAIN?Variable not set}`)
-  #     - traefik.http.routers.traefik-dashboard-https.tls=true
-  #     # Use the "le" (Let's Encrypt) resolver created below
-  #     - traefik.http.routers.traefik-dashboard-https.tls.certresolver=le
-  #     # Use the special Traefik service api@internal with the web UI/Dashboard
-  #     - traefik.http.routers.traefik-dashboard-https.service=api@internal
-  #     # https-redirect middleware to redirect HTTP to HTTPS
-  #     - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
-  #     - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
-  #     # traefik-http set up only to use the middleware to redirect to https
-  #     - traefik.http.routers.traefik-dashboard-http.middlewares=https-redirect
-  #     # admin-auth middleware with HTTP Basic auth
-  #     # Using the environment variables USERNAME and HASHED_PASSWORD
-  #     - traefik.http.middlewares.admin-auth.basicauth.users=${USERNAME?Variable not set}:${HASHED_PASSWORD?Variable not set}
-  #     # Enable HTTP Basic auth, using the middleware created above
-  #     - traefik.http.routers.traefik-dashboard-https.middlewares=admin-auth
-  #   volumes:
-  #     # Add Docker as a mounted volume, so that Traefik can read the labels of other services
-  #     - /var/run/docker.sock:/var/run/docker.sock:ro
-  #     # Mount the volume to store the certificates
-  #     - traefik-public-certificates:/certificates
-  #   command:
-  #     # Enable Docker in Traefik, so that it reads labels from Docker services
-  #     - --providers.docker
-  #     # Do not expose all Docker services, only the ones explicitly exposed
-  #     - --providers.docker.exposedbydefault=false
-  #     # Create an entrypoint "http" listening on port 80
-  #     - --entrypoints.http.address=:80
-  #     # Create an entrypoint "https" listening on port 443
-  #     - --entrypoints.https.address=:443
-  #     # Create the certificate resolver "le" for Let's Encrypt, uses the environment variable EMAIL
-  #     - --certificatesresolvers.le.acme.email=${EMAIL?Variable not set}
-  #     # Store the Let's Encrypt certificates in the mounted volume
-  #     - --certificatesresolvers.le.acme.storage=/certificates/acme.json
-  #     # Use the TLS Challenge for Let's Encrypt
-  #     - --certificatesresolvers.le.acme.tlschallenge=true
-  #     # Enable the access log, with HTTP requests
-  #     - --accesslog
-  #     # Enable the Traefik log, for configurations and errors
-  #     - --log
-  #     # Enable the Dashboard and API
-  #     - --api
-  #   networks:
-  #     # Use the public network created to be shared between Traefik and
-  #     # any other service that needs to be publicly available with HTTPS
-  #     - traefik-public
+      - REDIS_PORT=6379
+      - RABBITMQ_SERVER=rabbitmq
+      - RABBITMQ_AMQP_PORT=5672
+      - FGA_API_URL=http://openfga:8080
+      - FGA_STORE_NAME=fastapi-demo
+    # healthcheck:
+    #   test: ["CMD-SHELL", "curl -f http://localhost:8080/healthz || exit 1"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
 
 volumes:
   fastapi-demo-db-data: {}
   fastapi-demo-redis-data: {}
-  fastapi-demo-redisinsight-data: {}
-  # traefik-public-certificates: {}
-# networks:
-#   traefik-public:
-#     # Allow setting it to false for testing
-#     external: true
+  fastapi-demo-openfga-primary-db-data: {}
+  # fastapi-demo-openfga-secondary-db-data: {}
+  fastapi-demo-rabbitmq-data: {}

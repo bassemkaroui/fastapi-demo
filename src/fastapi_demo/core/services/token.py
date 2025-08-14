@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pydantic import UUID4
     from redis.asyncio.client import Redis
+    from ulid import ULID
 
 
 class TokenService:
@@ -13,7 +13,7 @@ class TokenService:
     async def revoke(self, token: str) -> None:
         await self.redis.delete(f"{self.redis_users_key_prefix}{token}")
 
-    async def revoke_all_for_user(self, user_id: "UUID4") -> None:
+    async def revoke_all_for_user(self, user_id: "ULID") -> None:
         cursor = 0
         keys_to_delete: list[str] = []
         user_id_str = str(user_id)

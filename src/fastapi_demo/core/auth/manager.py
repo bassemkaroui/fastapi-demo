@@ -3,34 +3,56 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from fastapi import BackgroundTasks, Depends, Request
-from fastapi_mail import FastMail, MessageSchema, MessageType
-from fastapi_users import BaseUserManager, InvalidPasswordException, UUIDIDMixin
+from fastapi import Depends, Request
+from fastapi_users import BaseUserManager, InvalidPasswordException, exceptions
 from fastapi_users_db_sqlmodel import SQLModelUserDatabaseAsync
+from ulid import ULID
 
-from fastapi_demo.api.dependencies import SettingsDep
+from fastapi_demo.core.celery.tasks.emails import (
+    send_reset_password_email,
+    send_verify_account_email,
+    send_welcome_email,
+)
 from fastapi_demo.core.config import settings
-from fastapi_demo.core.db import get_user_db
+from fastapi_demo.core.db.dependencies import get_user_db
 from fastapi_demo.core.models.users import User
 from fastapi_demo.core.schemas.users import UserCreate
 
 SECRET = settings.SECRET_KEY
 
 
-class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+class ULIDIDMixin:
+    def parse_id(self, value: Any) -> ULID:  # noqa: PLR6301
+        if isinstance(value, ULID):
+            return value
+        if isinstance(value, str):
+            try:
+                return ULID.from_str(value)  # type: ignore[no-any-return]
+            except ValueError as e:
+                raise exceptions.InvalidID() from e
+        if isinstance(value, bytes):
+            try:
+                return ULID.from_bytes(value)  # type: ignore[no-any-return]
+            except ValueError as e:
+                raise exceptions.InvalidID() from e
+        if isinstance(value, uuid.UUID):
+            try:
+                return ULID.from_uuid(value)  # type: ignore[no-any-return]
+            except ValueError as e:
+                raise exceptions.InvalidID() from e
+        raise exceptions.InvalidID()
+
+
+class UserManager(ULIDIDMixin, BaseUserManager[User, ULID]):
     reset_password_token_secret = SECRET
     verification_token_secret = SECRET
 
     def __init__(
         self,
         user_db: SQLModelUserDatabaseAsync,
-        background_tasks: BackgroundTasks,
-        mailer: FastMail,
         **kwargs: Any,
     ):
         super().__init__(user_db, **kwargs)
-        self.background_tasks = background_tasks
-        self.mailer = mailer
 
     async def validate_password(  # noqa: PLR6301
         self,
@@ -58,17 +80,10 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
                 reason="Password must contain at least one special character"
             )
 
-    async def on_after_register(self, user: User, request: Request | None = None) -> None:  # noqa: ARG002
+    async def on_after_register(self, user: User, request: Request | None = None) -> None:  # noqa: ARG002, PLR6301
         # print(f"User {user.id} has registered.")
-        message = MessageSchema(
-            subject="Welcome to fastapi-demo! 🎉",
-            recipients=[user.email],
-            template_body={"project_name": settings.PROJECT_NAME, "user": user},
-            subtype=MessageType.html,
-        )
-        self.background_tasks.add_task(
-            self.mailer.send_message, message, template_name="new_account.html"
-        )
+        user_data = {"email": user.email, "first_name": user.first_name}
+        send_welcome_email.delay(user_data)
 
     async def on_after_forgot_password(
         self,
@@ -77,22 +92,10 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         request: Request | None = None,  # noqa: ARG002
     ) -> None:
         # print(f"User {user.id} has forgot their password. Reset token: {token}")
+        user_data = {"email": user.email, "first_name": user.first_name}
         link = f"{str(settings.FRONTEND_HOST).rstrip('/')}/?action=reset&token={token}"
-        message = MessageSchema(
-            subject="Reset your fastapi-demo password",
-            recipients=[user.email],
-            template_body={
-                "project_name": settings.PROJECT_NAME,
-                "user": user,
-                "link": link,
-                "reset_password_token_lifetime_minutes": self.reset_password_token_lifetime_seconds
-                // 60,
-            },
-            subtype=MessageType.html,
-        )
-        self.background_tasks.add_task(
-            self.mailer.send_message, message, template_name="reset_password.html"
-        )
+        ttl_minutes = self.reset_password_token_lifetime_seconds // 60
+        send_reset_password_email.delay(user_data, link, ttl_minutes)
 
     async def on_after_request_verify(
         self,
@@ -101,37 +104,14 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
         request: Request | None = None,  # noqa: ARG002
     ) -> None:
         # print(f"Verification requested for user {user.id}. Verification token: {token}")
+        user_data = {"email": user.email, "first_name": user.first_name}
         link = f"{str(settings.FRONTEND_HOST).rstrip('/')}/?action=verify&token={token}"
-        message = MessageSchema(
-            subject="Confirm your fastapi-demo account 🛡️",
-            recipients=[user.email],
-            template_body={
-                "project_name": settings.PROJECT_NAME,
-                "user": user,
-                "link": link,
-                "verification_token_lifetime_minutes": self.verification_token_lifetime_seconds
-                // 60,
-            },
-            subtype=MessageType.html,
-        )
-        self.background_tasks.add_task(
-            self.mailer.send_message, message, template_name="verify_account.html"
-        )
-
-
-async def get_mailer(settings: SettingsDep) -> FastMail:  # noqa: RUF029
-    return FastMail(settings.mailer_config)
+        ttl_minutes = self.verification_token_lifetime_seconds // 60
+        send_verify_account_email.delay(user_data, link, ttl_minutes)
 
 
 async def get_user_manager(  # noqa: RUF029
     user_db: Annotated[SQLModelUserDatabaseAsync, Depends(get_user_db)],
-    background_tasks: BackgroundTasks,
-    mailer: Annotated[FastMail, Depends(get_mailer)],
 ) -> AsyncGenerator[UserManager]:
-    # yield UserManager(
-    #     user_db=user_db,
-    #     background_tasks=background_tasks,
-    #     mailer=mailer,
-    #     password_helper=password_helper,
-    # )
-    yield UserManager(user_db=user_db, background_tasks=background_tasks, mailer=mailer)
+    # yield UserManager(user_db=user_db, password_helper=password_helper)
+    yield UserManager(user_db=user_db)

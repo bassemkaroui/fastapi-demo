@@ -41,6 +41,13 @@ dependencies = [
     "limits>=5.2.0",
     "aiocache>=0.12.3",
     "asgiref>=3.8.1",
+    "celery[redis]>=5.5.3",
+    "flower>=2.0.1",
+    "openfga-sdk>=0.9.5",
+    "alembic-postgresql-enum>=1.8.0",
+    "librabbitmq",
+    "fastapi-pagination[sqlmodel]",
+    "python-ulid[pydantic]>=3.0.0",
 ]
 
 [project.urls]
@@ -71,6 +78,7 @@ dev = [
     "ipython>=8.35.0",
     "duty>=1.6.0",
     "pytest-asyncio>=0.26.0",
+    "debugpy>=1.8.14",
 ]
 
 [tool.commitizen]  # https://commitizen-tools.github.io/commitizen/config/
@@ -85,7 +93,7 @@ gpg_sign = true
 
 [tool.mypy]
 files = ["src"]
-exclude = ["alembic"]
+exclude = ["src/dataup_pipelines/alembic"]
 check_untyped_defs = true
 disallow_untyped_defs = true
 # disallow_any_unimported = true
@@ -226,6 +234,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]
+"src/fastapi_demo/api/exception_handlers.py" = ["RUF029", "ARG001"]
+"src/fastapi_demo/api/dependencies.py" = ["RUF029", "ARG001"]
+"src/fastapi_demo/core/config.py" = ["N802"]
 
 [tool.ruff.format]
 preview = true
@@ -253,3 +264,7 @@ omit = ["*/__init__.py", "*/fastapi_demo/testing/*"]
 [tool.coverage.run]
 branch = true
 source = ["src"]
+
+[tool.uv.sources]
+librabbitmq = { git = "https://github.com/celery/librabbitmq.git" }
+fastapi-pagination = { git = "https://github.com/uriyyo/fastapi-pagination.git" }

@@ -1,0 +1,33 @@
+name: "fastapi-demo-dev-tests"
+model_file: "../models/dev-authorization-model.fga"
+tuple_file: "../tuples/dev-tuples.yaml"
+tests:
+  - name: "admin-permissions"
+    # description: ""
+    # tuple_file: "./xxx.yaml"
+    check:
+      - user: user:diane
+        object: repo:openfga/openfga
+        assertions:
+          admin: true
+      - user: user:beth
+        object: repo:openfga/openfga
+        assertions:
+          admin: false
+  - name: "user-permissions"
+    # description: ""
+    # tuple_file: "./xxx.yaml"
+    check:
+      - user: user:anne
+        object: repo:openfga/openfga
+        assertions:
+          reader: true
+          triager: false
+      - user: user:erik
+        object: repo:openfga/openfga
+        assertions:
+          reader: true
+      - user: user:charles
+        object: repo:openfga/openfga
+        assertions:
+          writer: true

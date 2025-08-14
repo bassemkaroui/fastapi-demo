@@ -1,0 +1,143 @@
+services:
+  db:
+    volumes:
+      - fastapi-demo-db-data-dev:/var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT}:5432"
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      - ADMINER_DESIGN=pepa-linha-dark
+    ports:
+      - "8088:8080"
+
+  redis:
+    volumes:
+      - fastapi-demo-redis-data-dev:/data
+    ports:
+      - "${REDIS_PORT}:6379"
+
+  redis-insight:
+    image: redis/redisinsight:2.70.0
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - RI_REDIS_HOST=redis
+      - RI_REDIS_PORT=6379
+    volumes:
+      - fastapi-demo-redisinsight-data:/data
+    ports:
+      - "5540:5540"
+
+  rabbitmq:
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+
+  celery_worker:
+    environment:
+      - FGA_STORE_NAME=fastapi-demo-dev
+
+  flower:
+    image: fastapi-demo:0.0.1
+    container_name: fastapi-demo-flower
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        - ENVIRONMENT=prod
+    depends_on:
+      redis:
+        condition: service_healthy
+      celery_worker:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_SERVER=db
+      - POSTGRES_PORT=5432
+      - REDIS_SERVER=redis
+      - REDIS_PORT=6379
+      - RABBITMQ_SERVER=rabbitmq
+      - RABBITMQ_AMQP_PORT=5672
+      - FGA_API_URL=http://openfga:8080
+      - FGA_STORE_NAME=fastapi-demo-dev
+    command: >
+      celery -A fastapi_demo.core.celery:${CELERY_APP_NAME} flower
+      --broker_api=http://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:15672/api/
+      --port=5555
+    healthcheck:
+      disable: true
+    ports:
+      - "5555:5555"
+
+  # --- OpenFGA ---
+
+  primary_postgres:
+    volumes:
+      - fastapi-demo-openfga-primary-db-data-dev:/var/lib/postgresql/data/pgdata
+    ports:
+      - "${OPENFGA_POSTGRES_PRIMARY_PORT}:5432"
+
+  openfga:
+    environment:
+      - OPENFGA_PLAYGROUND_ENABLED=true # ← explicitly enable the Playground
+      - OPENFGA_PLAYGROUND_PORT=3000
+      # - OPENFGA_TRACE_ENABLED=true
+      # - OPENFGA_TRACE_SAMPLE_RATIO=1
+      # - OPENFGA_EXPERIMENTALS=${OPENFGA_EXPERIMENTALS}
+    ports:
+      - "8080:8080" # http
+      # - "8081:8081" # grpc
+      - "3000:3000" # playground
+      # - "2112:2112" # prometheus metrics
+
+  prestart:
+    environment:
+      - FGA_STORE_NAME=${FGA_STORE_NAME}
+      - FGA_TESTS_STORE_NAME=${FGA_TESTS_STORE_NAME}
+      - OPENFGA_STORE_FILE=${OPENFGA_STORE_FILE}
+      - OPENFGA_TESTS_STORE_FILE=${OPENFGA_TESTS_STORE_FILE}
+      - OPENFGA_MODEL_FILE=${OPENFGA_MODEL_FILE}
+
+  fastapi-demo:
+    image: fastapi-demo:0.0.1-devel
+    container_name: fastapi-demo-api-dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+      args:
+        - ENVIRONMENT=dev
+    ports:
+      - "8000:8000"
+      - "8085:8085"
+    environment:
+      - FGA_STORE_NAME=fastapi-demo-dev
+    stdin_open: true
+    tty: true
+    develop:
+      watch:
+        - action: sync
+          path: .
+          target: /workspaces/fastapi-demo
+          ignore:
+            - .venv/
+            - .tox/
+
+        - action: rebuild
+          path: ./pyproject.toml
+
+volumes:
+  fastapi-demo-db-data-dev: {}
+  fastapi-demo-redis-data-dev: {}
+  fastapi-demo-redisinsight-data: {}
+  fastapi-demo-openfga-primary-db-data-dev: {}
