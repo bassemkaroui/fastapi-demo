@@ -1,4 +1,5 @@
 import time
+from collections.abc import AsyncGenerator
 from functools import lru_cache
 from typing import Annotated, cast
 
@@ -19,15 +20,11 @@ from fastapi_demo.core.auth.users import (
     get_current_user,
 )
 from fastapi_demo.core.config import Settings
-from fastapi_demo.core.db.dependencies import get_async_sqlmodel_session
+from fastapi_demo.core.db.engine import AsyncSessionMaker
 from fastapi_demo.core.models.users import User
 from fastapi_demo.core.services.api_key import APIKeyService
 from fastapi_demo.core.services.token import TokenService
 from fastapi_demo.core.services.user import UserService
-
-# --- Session Dependency ---
-
-SessionDep = Annotated[AsyncSession, Depends(get_async_sqlmodel_session)]
 
 # --- Settings Dependency ---
 
@@ -39,6 +36,16 @@ def get_settings() -> Settings:
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
+
+# --- Session Dependency ---
+
+
+async def get_async_session() -> AsyncGenerator[AsyncSession]:
+    async with AsyncSessionMaker() as session:
+        yield session
+
+
+SessionDep = Annotated[AsyncSession, Depends(get_async_session)]
 
 # --- Async HTTP Client ---
 
