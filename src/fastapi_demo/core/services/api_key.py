@@ -7,7 +7,7 @@ from asyncpg import UniqueViolationError
 from fastapi_pagination.ext.sqlmodel import apaginate
 from pwdlib.hashers.argon2 import Argon2Hasher
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import col, desc, func, select, update
+from sqlmodel import col, desc, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 from ulid import ULID
 
@@ -86,13 +86,7 @@ class APIKeyService:
         if search is not None:
             pattern = f"%{search}%"
             statement = statement.where(col(APIKey.name).ilike(pattern))
-        # query_result = await self.session.exec(statement)
-        # api_keys = query_result.all()
-        page = await apaginate(
-            self.session,
-            statement.order_by(desc(APIKey.id)),  # type: ignore[arg-type]
-            count_query=select(func.count()).select_from(APIKey),
-        )
+        page = await apaginate(self.session, statement.order_by(desc(APIKey.id)))  # type: ignore[arg-type]
         return page
 
     async def update_api_key(

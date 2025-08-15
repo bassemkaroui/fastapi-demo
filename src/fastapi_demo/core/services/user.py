@@ -1,5 +1,5 @@
 from fastapi_pagination.ext.sqlmodel import apaginate
-from sqlmodel import col, func, or_, select
+from sqlmodel import col, or_, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from fastapi_demo.core.models.users import User
@@ -35,9 +35,5 @@ class UserService:
             )
         # query_result = await self.session.exec(statement)
         # users = query_result.all()
-        page = await apaginate(
-            self.session,
-            statement.order_by(User.id),  # type: ignore[arg-type]
-            count_query=select(func.count()).select_from(User),
-        )
+        page = await apaginate(self.session, statement.order_by(User.id))  # type: ignore[arg-type]
         return page
