@@ -134,7 +134,7 @@ class APIKeyStrategy(Strategy[User, ULID]):
             except (exceptions.UserNotExists, exceptions.InvalidID, KeyError):
                 return None
             else:
-                return await user_manager.get(db_key.owner_id)
+                return await user_manager.get(user_id)
 
 
 api_key_transport = APIKeyTransport(name="X-API-Key")  # type: ignore[abstract]
